@@ -38,7 +38,7 @@ else
   fail "Λείπει το pytest. Εγκατάστησε τις εξαρτήσεις BACKEND/requirements.txt και pytest."
 fi
 export ANDROID_HOME="$SDK" ANDROID_SDK_ROOT="$SDK"
-pass "Εκκίνηση Gradle assembleDebug — package com.aria.original"
+pass "Εκκίνηση Gradle assembleDebug — package com.aria.original.v117"
 if [ -s "$ROOT/app/gradlew" ] && [ -s "$ROOT/app/gradle/wrapper/gradle-wrapper.jar" ]; then
   chmod +x "$ROOT/app/gradlew"
   bash "$ROOT/app/gradlew" --no-daemon --stacktrace assembleDebug
