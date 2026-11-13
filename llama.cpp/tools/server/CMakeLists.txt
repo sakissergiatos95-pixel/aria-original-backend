@@ -66,4 +66,5 @@ add_executable(${TARGET} main.cpp)
 install(TARGETS ${TARGET} RUNTIME)
 
 target_link_libraries(${TARGET} PRIVATE llama-server-impl)
+set_target_properties(${TARGET} PROPERTIES INSTALL_RPATH "$ORIGIN" BUILD_WITH_INSTALL_RPATH ON)
 target_compile_features(${TARGET} PRIVATE cxx_std_17)
