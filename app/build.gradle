@@ -9,7 +9,7 @@ android {
     compileSdk 34
 
     defaultConfig {
-        applicationId 'com.aria.original'
+        applicationId "com.aria.original.v117"
         minSdk 30
         targetSdk 28
         versionCode 117
