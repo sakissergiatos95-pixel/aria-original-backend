@@ -1,0 +1,21 @@
+ARIA ORIGINAL V117 — ΕΝΙΑΙΟ BUILD ΣΤΟ TERMUX ARM64
+
+1. Αποσυμπίεσε το ARIA_ORIGINAL_V117_COMPLETE_SOURCE.zip.
+2. Άνοιξε Termux και μπες στον φάκελο ARIA_ORIGINAL.
+3. Βεβαιώσου ότι υπάρχουν Android SDK Platform 34, Android NDK, Java 17/21, CMake και Ninja.
+4. Όρισε ANDROID_SDK_ROOT (και προαιρετικά ANDROID_NDK_HOME) αν δεν εντοπίζονται αυτόματα.
+5. Εκτέλεσε ΜΟΝΟ:
+
+   bash BUILD_ARIA_ORIGINAL.sh
+
+Το script ελέγχει source, ξαναχτίζει υποχρεωτικά llama-server από τον ενσωματωμένο llama.cpp με Qwen3 support, ελέγχει ARM64/RUNPATH/runtime, εκτελεί Gradle assembleDebug και επαληθεύει το APK.
+
+Αναμενόμενα αρχεία μετά από επιτυχημένο build:
+   output/ARIA_ORIGINAL.apk
+   output/ARIA_ORIGINAL.sha256
+
+Έκδοση: versionCode 117, versionName 2.2.5-original.
+Το APK είναι debug build για εγκατάσταση/δοκιμή, όχι release-signed APK.
+
+ΣΗΜΑΝΤΙΚΟ BACKEND:
+Το HTTP 404 δεν διορθώνεται από το APK. Δημοσίευσε το Blueprint από το root render.yaml στο Render και όρισε OPENAI_API_KEY και ARIA_OWNER_BOOTSTRAP_TOKEN. Έλεγξε πρώτα GET /health να επιστρέφει HTTP 200 και μετά δοκίμασε εγγραφή/σύνδεση από την εφαρμογή. Το billing παραμένει OFF.

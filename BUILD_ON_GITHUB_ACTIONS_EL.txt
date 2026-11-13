@@ -1,0 +1,17 @@
+ARIA ORIGINAL V117 — ΠΡΑΓΜΑΤΙΚΟ ANDROID BUILD
+
+Γιατί δεν χτίζεται στο συγκεκριμένο Termux:
+Οι εγκατεστημένοι Android NDK περιέχουν host compiler linux-x86_64. Το τηλέφωνο είναι aarch64 Android. Η ανάμειξη του Termux Clang με τα libc++ headers του NDK προκάλεσε ασυμβατότητα (std::abs / cerrno). Το τοπικό CMake configuration δεν αποτελεί επιτυχημένο native build.
+
+Η σωστή διαδρομή του παρόντος source package είναι Linux x86_64 CI με τον επίσημο Android NDK toolchain. Το workflow .github/workflows/android-build.yml εγκαθιστά Java 21, Android SDK 34, NDK 27.0.12077973, CMake/Ninja, εκτελεί backend tests, ξαναχτίζει το llama-server από το ενσωματωμένο llama.cpp και μετά εκτελεί Gradle assembleDebug. Αποθηκεύει APK και logs ως GitHub Actions artifact.
+
+Βήματα:
+1. Ανέβασε ΟΛΟΚΛΗΡΟ το περιεχόμενο αυτού του ZIP σε νέο ιδιωτικό GitHub repository (ή αντικατάστησε το περιεχόμενο του υπάρχοντος repository).
+2. Άνοιξε Actions → ARIA ORIGINAL Android ARM64 build → Run workflow.
+3. Περίμενε να ολοκληρωθεί το job. Αν αποτύχει, κατέβασε το artifact/log και έλεγξε το πρώτο πραγματικό error.
+4. Αν πετύχει, κατέβασε το artifact ARIA-ORIGINAL-V117-APK-and-build-log. Το APK είναι output/ARIA_ORIGINAL.apk.
+
+ΣΗΜΑΝΤΙΚΟ:
+- Το workflow δεν παρακάμπτει σφάλματα. Αποτυγχάνει αν αποτύχουν native build, backend tests, Gradle ή οι έλεγχοι APK.
+- Αυτό το ZIP είναι πλήρης πηγαίος κώδικας με αυτοματοποιημένη διαδρομή build, ΟΧΙ ήδη χτισμένο APK.
+- Η ανάπτυξη του backend στο Render, τα production secrets, η βάση δεδομένων, οι πάροχοι email/πληρωμών και η δοκιμή πραγματικής σύνδεσης/συνδρομών παραμένουν ξεχωριστές εργασίες και δεν γίνονται από το Android build.

@@ -1,0 +1,28 @@
+ARIA ORIGINAL V117 — ΠΛΗΡΗΣ ΔΙΟΡΘΩΣΗ SOURCE
+
+Ταυτοποίηση Android: com.aria.original
+versionCode: 117
+versionName: 2.2.5-original
+
+ΑΛΛΑΓΕΣ
+1. Το build δεν επαναχρησιμοποιεί πλέον το παλιό ενσωματωμένο llama-server. Πριν από το Gradle εκτελεί υποχρεωτικό native rebuild από τον llama.cpp source tree που περιλαμβάνεται στο ZIP.
+2. Το native build είναι ARM64 / Android NDK, CPU-only, και ελέγχει Qwen3 model dispatch, ELF architecture, $ORIGIN RUNPATH και NDK libc++ runtime.
+3. Το build αποτυγχάνει με σαφές μήνυμα αν λείπει NDK/CMake/Ninja ή αν το νέο Qwen3-capable binary δεν δημιουργηθεί. Δεν παράγει APK με παλιό binary.
+4. Η βάση SQLite επιβάλλει πλέον μοναδικό OWNER με partial unique index. Το bootstrap μετατρέπει σύγκρουση δεύτερου OWNER σε HTTP 409.
+5. Τα source preflight checks ελέγχουν το native build script, Qwen3 dispatch και single-owner constraint.
+
+ΕΛΕΓΧΟΙ ΠΟΥ ΕΚΤΕΛΕΣΤΗΚΑΝ ΕΔΩ
+- bash -n σε BUILD_ARIA_ORIGINAL.sh, tools/build_llama_server_android.sh και tools/verify_source.sh: PASS.
+- Python compile του backend και των tests: PASS.
+- tools/verify_source.sh: PASS.
+- Backend pytest: 1 passed.
+- SQLite partial unique index: duplicate OWNER rejected.
+- ZIP source archive integrity: θα επιβεβαιωθεί μετά τη δημιουργία του ZIP.
+
+ΔΕΝ ΕΧΟΥΝ ΕΚΤΕΛΕΣΤΕΙ / ΔΕΝ ΙΣΧΥΡΙΖΟΜΑΣΤΕ
+- Android NDK cross-build σε αυτό το περιβάλλον (δεν υπάρχει εγκατεστημένο Android NDK/SDK).
+- Gradle APK build και δοκιμή σε πραγματική συσκευή.
+- Render deployment ή ρύθμιση μυστικών κλειδιών. Το HTTP 404 σταματά να λύνεται μόνο με APK αλλαγή: πρέπει να δημοσιευτεί το Backend Blueprint από το root render.yaml.
+- Online AI live request, πραγματικό Qwen3 inference στη συσκευή και έλεγχος μικροφώνου με runtime permission.
+
+Η έκδοση 117 είναι διορθωμένο SOURCE/BUILD PACKAGE. Δεν χαρακτηρίζεται εγκαταστάσιμο τελικό APK πριν περάσουν οι παραπάνω εξωτερικοί έλεγχοι.

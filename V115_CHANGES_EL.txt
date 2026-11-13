@@ -1,0 +1,11 @@
+ARIA ORIGINAL V116 — ΔΙΟΡΘΩΣΕΙΣ ΔΙΑΣΥΝΔΕΣΗΣ
+
+- Προστέθηκε root-level render.yaml ώστε το Render Blueprint να ανακαλύπτει το service από τη ρίζα του repository και να χρησιμοποιεί rootDir BACKEND.
+- Email hint εγγραφής: silena@eimail.com (παράδειγμα, ο χρήστης εισάγει το δικό του email).
+- Το Android account client χειρίζεται καθαρά απαντήσεις HTTP 404 και εξηγεί ότι η υπηρεσία/διαδρομή δεν έχει δημοσιευτεί.
+- Η πλήρης αυτοδιάγνωση διατηρεί μεγαλύτερο τμήμα του llama-server.log (έως 80 γραμμές / 12 KB).
+- Η υπάρχουσα διαδρομή εγγραφής POST /auth/register και σύνδεσης POST /auth/login διατηρείται.
+
+Επαληθεύτηκαν: source preflight PASS, backend unittest PASS (1 test), bash syntax PASS, root Render YAML parsed.
+
+Δεν έγινε Deploy στο Render και δεν έγινε πραγματικό Android runtime test σε αυτή την εκτέλεση. Το Online AI θα απαντήσει μόνο μετά το Deploy και την καταχώριση OPENAI_API_KEY. Η αιτία αποτυχίας του llama-server δεν μπορεί να πιστοποιηθεί χωρίς το runtime log από τη συσκευή· η V116 καταγράφει μεγαλύτερο log για να γίνει ακριβής διόρθωση, όχι εικασία.

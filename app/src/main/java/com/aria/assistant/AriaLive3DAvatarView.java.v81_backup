@@ -1,0 +1,323 @@
+package com.aria.assistant;
+
+import android.content.Context;
+import android.opengl.GLSurfaceView;
+import android.opengl.GLES20;
+import android.opengl.Matrix;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
+import java.nio.ShortBuffer;
+import java.util.Random;
+
+/**
+ * ARIA V79 procedural 3D avatar with sculpted head mesh.
+ * A real OpenGL ES mesh scene (not a photograph, GIF, video or 2D overlay).
+ * Facial animation is procedural and state-driven; Android TTS character ranges select
+ * approximate Greek viseme classes while blink, gaze and head motion run continuously.
+ */
+public final class AriaLive3DAvatarView extends GLSurfaceView implements GLSurfaceView.Renderer {
+    private static final int IDLE=0, LISTENING=1, THINKING=2, SPEAKING=3;
+    private final Sphere sphere = new Sphere(40, 28);
+    private final FaceMesh faceMesh = new FaceMesh(48, 40);
+    private final float[] projection = new float[16];
+    private final float[] view = new float[16];
+    private final float[] vp = new float[16];
+    private final float[] model = new float[16];
+    private final float[] mvp = new float[16];
+    private final float[] normal = new float[16];
+    private int program, aPosition, aNormal, uMvp, uModel, uColor, uLight;
+    private volatile int state=IDLE;
+    private volatile boolean active=true;
+    private long start=System.nanoTime(), nextBlink=System.nanoTime()+2200000000L, blinkAt=0;
+    private float gazeX=0, gazeY=0, targetX=0, targetY=0, animYaw=0, animPitch=0;
+    private boolean headTransform=false;
+    private final Random random=new Random();
+    private volatile String speechText="";
+    private volatile int speechCharIndex=0;
+    private volatile int speechViseme=0; // 0 neutral, 1 open, 2 wide, 3 rounded, 4 closed
+    private float currentMouthOpen=0.012f;
+    private float currentMouthWidth=1f;
+
+    public AriaLive3DAvatarView(Context context) {
+        super(context);
+        setEGLContextClientVersion(2);
+        setRenderer(this);
+        setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+        setZOrderOnTop(false);
+        setPreserveEGLContextOnPause(true);
+        setFocusable(false);
+    }
+
+    public void setListening(boolean v){ state=v?LISTENING:(state==LISTENING?IDLE:state); }
+    public void setThinking(boolean v){ state=v?THINKING:(state==THINKING?IDLE:state); }
+    public void setSpeaking(boolean v){
+        state=v?SPEAKING:(state==SPEAKING?IDLE:state);
+        if(!v){ speechViseme=0; speechCharIndex=0; }
+    }
+    /** Supplies the exact utterance so Android TTS character-range callbacks can drive mouth shapes. */
+    public void setSpeechText(String text){ speechText=text==null?"":text; speechCharIndex=0; speechViseme=0; }
+    /** Called from UtteranceProgressListener.onRangeStart; this is timing-based viseme approximation, not phoneme extraction. */
+    public void setSpeechRange(int start,int end){
+        String text=speechText;
+        if(text==null || text.isEmpty() || start<0 || start>=text.length()) return;
+        speechCharIndex=start;
+        int cp=text.codePointAt(start);
+        speechViseme=classifyViseme(cp);
+    }
+    private static int classifyViseme(int codePoint){
+        char c=Character.toLowerCase((char)codePoint);
+        if("αάεέηήωώ".indexOf(c)>=0) return 1; // open jaw
+        if("ιίυύ".indexOf(c)>=0) return 2;     // spread lips
+        if("οόου".indexOf(c)>=0) return 3;     // rounded lips
+        if("μμππβφ".indexOf(c)>=0) return 4;   // closed / near-closed lips
+        if(Character.isWhitespace(c) || ",.;:!?·".indexOf(c)>=0) return 0;
+        return 2;
+    }
+
+    @Override public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl, javax.microedition.khronos.egl.EGLConfig config) {
+        GLES20.glClearColor(0.008f,0.018f,0.045f,1f);
+        GLES20.glEnable(GLES20.GL_DEPTH_TEST);
+        GLES20.glEnable(GLES20.GL_BLEND);
+        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA,GLES20.GL_ONE_MINUS_SRC_ALPHA);
+        String vs="attribute vec3 aPosition; attribute vec3 aNormal; uniform mat4 uMvp; uniform mat4 uModel; varying vec3 vN; varying vec3 vP; void main(){ vec4 p=uModel*vec4(aPosition,1.0); vP=p.xyz; vN=mat3(uModel)*aNormal; gl_Position=uMvp*vec4(aPosition,1.0); }";
+        String fs="precision mediump float; uniform vec4 uColor; uniform vec3 uLight; varying vec3 vN; varying vec3 vP; void main(){ vec3 n=normalize(vN); vec3 l=normalize(uLight-vP); vec3 v=normalize(vec3(0.0,0.0,5.8)-vP); float ndl=max(dot(n,l),0.0); float wrap=max((dot(n,l)+0.28)/1.28,0.0); float spec=pow(max(dot(reflect(-l,n),v),0.0),36.0)*0.11; float rim=pow(1.0-max(dot(n,vec3(0.0,0.0,1.0)),0.0),2.0); float soft=0.12*pow(1.0-max(dot(n,l),0.0),2.0); vec3 skinScatter=uColor.rgb*(0.10*wrap+soft); vec3 c=uColor.rgb*(0.42+0.48*ndl)+skinScatter+vec3(spec)+vec3(0.025,0.22,0.34)*rim*0.18; gl_FragColor=vec4(c,uColor.a); }";
+        program=link(compile(GLES20.GL_VERTEX_SHADER,vs),compile(GLES20.GL_FRAGMENT_SHADER,fs));
+        aPosition=GLES20.glGetAttribLocation(program,"aPosition");
+        aNormal=GLES20.glGetAttribLocation(program,"aNormal");
+        uMvp=GLES20.glGetUniformLocation(program,"uMvp");
+        uModel=GLES20.glGetUniformLocation(program,"uModel");
+        uColor=GLES20.glGetUniformLocation(program,"uColor");
+        uLight=GLES20.glGetUniformLocation(program,"uLight");
+    }
+
+    @Override public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,int width,int height) {
+        GLES20.glViewport(0,0,width,height);
+        float ratio=(float)width/Math.max(1,height);
+        Matrix.perspectiveM(projection,0,35f,ratio,0.1f,30f);
+        Matrix.setLookAtM(view,0,0f,0f,5.8f,0f,0f,0f,0f,1f,0f);
+        Matrix.multiplyMM(vp,0,projection,0,view,0);
+    }
+
+    @Override public void onDrawFrame(javax.microedition.khronos.opengles.GL10 gl) {
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT|GLES20.GL_DEPTH_BUFFER_BIT);
+        if(program==0)return;
+        long now=System.nanoTime();
+        if(now>=nextBlink && blinkAt==0){ blinkAt=now; nextBlink=now+2600000000L+(long)(random.nextFloat()*2600000000L); }
+        float blink=0f;
+        if(blinkAt!=0){ float q=(now-blinkAt)/145000000f; if(q>=1f){blinkAt=0;}else blink=(float)Math.sin(q*Math.PI); }
+        if(random.nextFloat()<0.006f){targetX=(random.nextFloat()-.5f)*.105f;targetY=(random.nextFloat()-.5f)*.055f;}
+        gazeX+=(targetX-gazeX)*.035f; gazeY+=(targetY-gazeY)*.035f;
+        float t=(now-start)/1.0e9f;
+        float headYaw=(float)Math.sin(t*.39f)*2.2f+(state==LISTENING?1.6f:0f);
+        float headPitch=(float)Math.sin(t*.57f)*.9f+(state==THINKING?-1.6f:0f);
+        GLES20.glUseProgram(program);
+        GLES20.glUniform3f(uLight,-2.5f,3.2f,5f);
+
+        // Upper torso, neck and shoulders: layered dark-blue suit with a soft silhouette.
+        float breath=1f+0.012f*(float)Math.sin(t*1.7f);
+        draw(0,-1.10f,-.04f,1.30f*breath,.43f,.50f,0xFF10283E,0);
+        draw(0,-.78f,.02f,.245f,.40f,.245f,0xFFD5A092,0);
+
+        // All facial parts share the same subtle head motion.
+        animYaw=headYaw; animPitch=headPitch; headTransform=true;
+
+        // Face: longer oval with a softer jaw and less exaggerated cheek volume.
+        drawFace(0,.02f,0,0xFFE8B9A7);
+        draw(-.49f,-.22f,.285f,.17f,.205f,.105f,0xFFE3AE9D,0);
+        draw(.49f,-.22f,.285f,.17f,.205f,.105f,0xFFE3AE9D,0);
+        draw(-.70f,-.015f,.015f,.105f,.205f,.105f,0xFFDDAA99,0);
+        draw(.70f,-.015f,.015f,.105f,.205f,.105f,0xFFDDAA99,0);
+
+        // Hair cap and flowing side sections. No horn-like front locks.
+        draw(0,.70f,-.075f,.735f,.48f,.565f,0xFF101B2C,0);
+        draw(-.665f,.18f,-.005f,.145f,.67f,.205f,0xFF111D30,0);
+        draw(.665f,.18f,-.005f,.145f,.67f,.205f,0xFF111D30,0);
+        draw(-.69f,-.28f,.00f,.105f,.43f,.15f,0xFF172A40,0);
+        draw(.69f,-.28f,.00f,.105f,.43f,.15f,0xFF172A40,0);
+        // Soft fringe across the forehead, formed from overlapping 3D locks.
+        draw(-.39f,.60f,.435f,.205f,.16f,.115f,0xFF17263A,0);
+        draw(-.16f,.66f,.475f,.205f,.145f,.105f,0xFF1B2D43,0);
+        draw(.08f,.66f,.475f,.205f,.145f,.105f,0xFF1B2D43,0);
+        draw(.32f,.60f,.435f,.205f,.16f,.115f,0xFF17263A,0);
+        draw(-.49f,.44f,.39f,.12f,.26f,.09f,0xFF1B2D43,0);
+        draw(.49f,.44f,.39f,.12f,.26f,.09f,0xFF1B2D43,0);
+        // Fine blue highlights on the hair.
+        draw(-.71f,.22f,.14f,.025f,.38f,.025f,0xFF17658A,1);
+        draw(.71f,.22f,.14f,.025f,.38f,.025f,0xFF17658A,1);
+
+        // Eyes: almond-shaped sclera, blue irises, dark pupils and catchlights.
+        float eyeY=.255f;
+        float eyeOpen=1f-blink*.96f;
+        for(int side=-1;side<=1;side+=2){
+            float x=side*.275f;
+            draw(x,eyeY,.492f,.188f,.088f*eyeOpen,.067f,0xFFFFF8F3,0);
+            // Fine lower eyelid rim follows the blink without hiding the iris.
+            draw(x,.207f,.512f,.165f,.014f+.010f*blink,.022f,0xFFC98F83,0);
+            draw(x+gazeX,.255f+gazeY,.548f,.073f,.073f*eyeOpen,.026f,0xFF168FCB,0);
+            draw(x+gazeX,.255f+gazeY,.571f,.034f,.043f*eyeOpen,.014f,0xFF071322,0);
+            draw(x+gazeX-.018f,.281f+gazeY,.585f,.016f,.017f,.008f,0xFFFFFFFF,1);
+            // Upper lash line and shaped eyebrow.
+            draw(x,.337f,.50f,.195f,.027f,.052f,0xFF35252A,0);
+            draw(x,.425f,.478f,.19f,.038f,.045f,0xFF493039,0);
+        }
+
+        // Nose bridge, rounded tip and subtle nostril shadows.
+        draw(0,.045f,.535f,.082f,.245f,.085f,0xFFE0A997,0);
+        draw(0,-.105f,.598f,.112f,.085f,.075f,0xFFE5AE9D,0);
+        draw(-.065f,-.145f,.625f,.026f,.018f,.018f,0xFFB77E75,0);
+        draw(.065f,-.145f,.625f,.026f,.018f,.018f,0xFFB77E75,0);
+
+        // Speech-driven mouth shapes. Android TTS range callbacks select Greek-letter viseme classes.
+        float desiredOpen=state==SPEAKING ? (speechViseme==1?.105f:speechViseme==2?.035f:speechViseme==3?.050f:speechViseme==4?.008f:.022f) : .010f;
+        float desiredWidth= speechViseme==2 ? 1.12f : speechViseme==3 ? .78f : 1.0f;
+        currentMouthOpen+=(desiredOpen-currentMouthOpen)*.24f;
+        currentMouthWidth+=(desiredWidth-currentMouthWidth)*.22f;
+        float mouthPulse=state==SPEAKING ? .008f*(.5f+.5f*(float)Math.sin(t*8.5f)) : 0f;
+        float mouthOpen=currentMouthOpen+mouthPulse;
+        float lipWidth=.174f*currentMouthWidth;
+        draw(0,-.405f,.525f,lipWidth,.018f+mouthOpen,.045f,0xFF682B3B,0);
+        draw(0,-.374f,.555f,lipWidth,.026f+mouthOpen*.18f,.034f,0xFFC8787D,0);
+        draw(0,-.445f,.548f,lipWidth*.89f,.022f+mouthOpen*.24f,.031f,0xFFD98E91,0);
+        draw(0,-.585f,.43f,.145f,.042f,.035f,0xFFDCA99A,0);
+        float smile=(state==SPEAKING && speechViseme==2) ? .020f : .006f;
+        draw(-.155f,-.392f,.525f,.028f,.018f+smile,.018f,0xFFB86D75,0);
+        draw(.155f,-.392f,.525f,.028f,.018f+smile,.018f,0xFFB86D75,0);
+
+        // Small ears and cyan audio hardware integrated into the silhouette.
+        draw(-.735f,.12f,.02f,.055f,.255f,.105f,0xFF13A9D5,1);
+        draw(.735f,.12f,.02f,.055f,.255f,.105f,0xFF13A9D5,1);
+        headTransform=false;
+        // Chest reactor, restrained rather than oversized.
+        draw(0,-1.03f,.49f,.095f,.095f,.045f,0xFF24CFFF,1);
+        draw(0,-1.00f,.51f,.13f,.13f,.055f,0xFF24CFFF,1);
+    }
+
+    /** V79: sculpted parametric head silhouette with a tapered jaw, cheek plane and forehead.
+     * This remains an on-device procedural mesh; it is not a scanned or photorealistic rigged asset. */
+    private void drawFace(float x,float y,float z,int color){
+        Matrix.setIdentityM(model,0);
+        if(headTransform){
+            Matrix.rotateM(model,0,animYaw,0f,1f,0f);
+            Matrix.rotateM(model,0,animPitch,1f,0f,0f);
+        }
+        Matrix.translateM(model,0,x,y,z);
+        Matrix.scaleM(model,0,.705f,1.00f,.555f);
+        Matrix.multiplyMM(mvp,0,vp,0,model,0);
+        GLES20.glUniformMatrix4fv(uMvp,1,false,mvp,0);
+        GLES20.glUniformMatrix4fv(uModel,1,false,model,0);
+        float r=((color>>16)&255)/255f,g=((color>>8)&255)/255f,b=(color&255)/255f;
+        GLES20.glUniform4f(uColor,r,g,b,1f);
+        faceMesh.draw(program,aPosition,aNormal);
+    }
+
+    private void draw(float x,float y,float z,float sx,float sy,float sz,int color,int emissive){
+        Matrix.setIdentityM(model,0);
+        if(headTransform){
+            Matrix.rotateM(model,0,animYaw,0f,1f,0f);
+            Matrix.rotateM(model,0,animPitch,1f,0f,0f);
+        }
+        Matrix.translateM(model,0,x,y,z);
+        Matrix.scaleM(model,0,sx,sy,sz);
+        Matrix.multiplyMM(mvp,0,vp,0,model,0);
+        GLES20.glUniformMatrix4fv(uMvp,1,false,mvp,0);
+        GLES20.glUniformMatrix4fv(uModel,1,false,model,0);
+        float r=((color>>16)&255)/255f,g=((color>>8)&255)/255f,b=(color&255)/255f;
+        GLES20.glUniform4f(uColor,r,g,b,1f);
+        if(emissive==1) GLES20.glUniform3f(uLight,0f,0f,6f);
+        sphere.draw(program,aPosition,aNormal);
+        if(emissive==1) GLES20.glUniform3f(uLight,-2.5f,3.2f,5f);
+    }
+
+    private static int compile(int type,String src){
+        int s=GLES20.glCreateShader(type); GLES20.glShaderSource(s,src); GLES20.glCompileShader(s);
+        int[] ok=new int[1]; GLES20.glGetShaderiv(s,GLES20.GL_COMPILE_STATUS,ok,0);
+        if(ok[0]==0){String log=GLES20.glGetShaderInfoLog(s);GLES20.glDeleteShader(s);throw new RuntimeException("ARIA avatar shader: "+log);}
+        return s;
+    }
+    private static int link(int v,int f){
+        int p=GLES20.glCreateProgram();GLES20.glAttachShader(p,v);GLES20.glAttachShader(p,f);GLES20.glLinkProgram(p);
+        int[] ok=new int[1];GLES20.glGetProgramiv(p,GLES20.GL_LINK_STATUS,ok,0);
+        if(ok[0]==0)throw new RuntimeException("ARIA avatar program: "+GLES20.glGetProgramInfoLog(p));
+        return p;
+    }
+
+    /** Ring-built head surface. Width and depth vary by height to avoid a uniform egg sphere. */
+    private static final class FaceMesh {
+        final FloatBuffer vertices,normals; final ShortBuffer indices; final int count;
+        FaceMesh(int rings,int sectors){
+            float[] v=new float[(rings+1)*(sectors+1)*3], n=new float[v.length];
+            short[] ix=new short[rings*sectors*6]; int k=0;
+            for(int r=0;r<=rings;r++){
+                float q=(float)r/rings; float lat=(float)(-Math.PI/2.0+Math.PI*q);
+                float sn=(float)Math.sin(lat), cs=(float)Math.cos(lat);
+                float y=sn;
+                float jaw=1f-0.22f*(float)Math.pow(Math.max(0f,-y),1.35);
+                float cheek=1f+0.055f*(float)Math.exp(-Math.pow((y+0.18f)/0.25f,2));
+                float forehead=1f-0.035f*(float)Math.max(0f,y);
+                float width=cs*jaw*cheek*forehead;
+                float depth=cs*(1f-0.10f*(float)Math.max(0f,-y)+0.025f*(float)Math.max(0f,y));
+                for(int a=0;a<=sectors;a++){
+                    double ang=2.0*Math.PI*a/sectors;
+                    float x=(float)Math.cos(ang)*width;
+                    float z=(float)Math.sin(ang)*depth;
+                    v[k]=x; n[k++]=x*0.82f;
+                    v[k]=y; n[k++]=y*1.08f;
+                    v[k]=z; n[k++]=z*0.92f;
+                }
+            }
+            k=0;
+            for(int r=0;r<rings;r++) for(int a=0;a<sectors;a++){
+                short a0=(short)(r*(sectors+1)+a), b0=(short)(a0+sectors+1);
+                ix[k++]=a0; ix[k++]=b0; ix[k++]=(short)(a0+1);
+                ix[k++]=(short)(a0+1); ix[k++]=b0; ix[k++]=(short)(b0+1);
+            }
+            vertices=ByteBuffer.allocateDirect(v.length*4).order(ByteOrder.nativeOrder()).asFloatBuffer(); vertices.put(v).position(0);
+            normals=ByteBuffer.allocateDirect(n.length*4).order(ByteOrder.nativeOrder()).asFloatBuffer(); normals.put(n).position(0);
+            indices=ByteBuffer.allocateDirect(ix.length*2).order(ByteOrder.nativeOrder()).asShortBuffer(); indices.put(ix).position(0); count=ix.length;
+        }
+        void draw(int program,int pos,int nor){
+            vertices.position(0); normals.position(0); indices.position(0);
+            GLES20.glEnableVertexAttribArray(pos); GLES20.glEnableVertexAttribArray(nor);
+            GLES20.glVertexAttribPointer(pos,3,GLES20.GL_FLOAT,false,0,vertices);
+            GLES20.glVertexAttribPointer(nor,3,GLES20.GL_FLOAT,false,0,normals);
+            GLES20.glDrawElements(GLES20.GL_TRIANGLES,count,GLES20.GL_UNSIGNED_SHORT,indices);
+            GLES20.glDisableVertexAttribArray(pos); GLES20.glDisableVertexAttribArray(nor);
+        }
+    }
+
+    private static final class Sphere {
+        final FloatBuffer vertices,normals; final ShortBuffer indices; final int count;
+        Sphere(int rings,int sectors){
+            float[] v=new float[(rings+1)*(sectors+1)*3],n=new float[v.length];
+            short[] ix=new short[rings*sectors*6]; int k=0;
+            for(int r=0;r<=rings;r++){
+                double phi=Math.PI*r/rings;
+                for(int s=0;s<=sectors;s++){
+                    double theta=2*Math.PI*s/sectors;
+                    float x=(float)(Math.sin(phi)*Math.cos(theta));
+                    float y=(float)Math.cos(phi);
+                    float z=(float)(Math.sin(phi)*Math.sin(theta));
+                    v[k]=x;n[k++]=x;v[k]=y;n[k++]=y;v[k]=z;n[k++]=z;
+                }
+            }
+            k=0;
+            for(int r=0;r<rings;r++)for(int s=0;s<sectors;s++){
+                short a=(short)(r*(sectors+1)+s),b=(short)(a+sectors+1);
+                ix[k++]=a;ix[k++]=b;ix[k++]=(short)(a+1);
+                ix[k++]=(short)(a+1);ix[k++]=b;ix[k++]=(short)(b+1);
+            }
+            vertices=ByteBuffer.allocateDirect(v.length*4).order(ByteOrder.nativeOrder()).asFloatBuffer();vertices.put(v).position(0);
+            normals=ByteBuffer.allocateDirect(n.length*4).order(ByteOrder.nativeOrder()).asFloatBuffer();normals.put(n).position(0);
+            indices=ByteBuffer.allocateDirect(ix.length*2).order(ByteOrder.nativeOrder()).asShortBuffer();indices.put(ix).position(0);count=ix.length;
+        }
+        void draw(int program,int pos,int nor){
+            vertices.position(0);normals.position(0);indices.position(0);
+            GLES20.glEnableVertexAttribArray(pos);GLES20.glEnableVertexAttribArray(nor);
+            GLES20.glVertexAttribPointer(pos,3,GLES20.GL_FLOAT,false,0,vertices);
+            GLES20.glVertexAttribPointer(nor,3,GLES20.GL_FLOAT,false,0,normals);
+            GLES20.glDrawElements(GLES20.GL_TRIANGLES,count,GLES20.GL_UNSIGNED_SHORT,indices);
+            GLES20.glDisableVertexAttribArray(pos);GLES20.glDisableVertexAttribArray(nor);
+        }
+    }
+}

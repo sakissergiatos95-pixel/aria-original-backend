@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: aria-original-backend
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    disk:
+      name: aria-original-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ARIA_OWNER_BOOTSTRAP_TOKEN
+        sync: false
+      - key: ARIA_OWNER_REPORT_EMAIL
+        sync: false
+      - key: ARIA_DB_PATH
+        value: /var/data/aria_original.sqlite3
+      - key: ARIA_ALLOWED_MODELS
+        value: gpt-4o-mini,gpt-4.1,gpt-image-1,gpt-image-2.5-flare
+      - key: ARIA_IMAGE_EDIT_MODEL
+        value: gpt-image-1
+      - key: ARIA_MAX_IMAGE_BYTES
+        value: "52428800"
+      - key: ARIA_BILLING_ENABLED
+        value: "false"
+      - key: ARIA_FREE_DAILY_LIMIT
+        value: "30"
+      - key: ARIA_PREMIUM_DAILY_LIMIT
+        value: "300"
+      - key: ARIA_SMTP_HOST
+        sync: false
+      - key: ARIA_SMTP_PORT
+        value: "587"
+      - key: ARIA_SMTP_USER
+        sync: false
+      - key: ARIA_SMTP_PASSWORD
+        sync: false
+      - key: ARIA_SMTP_FROM
+        sync: false

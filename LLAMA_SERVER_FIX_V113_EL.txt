@@ -1,0 +1,14 @@
+ARIA ORIGINAL V113 — ΔΙΟΡΘΩΣΗ ΕΚΚΙΝΗΣΗΣ ΤΟΠΙΚΟΥ SERVER
+
+Εντοπίστηκε πραγματικό πρόβλημα στο ενσωματωμένο ARM64 εκτελέσιμο:
+Το ELF RUNPATH έδειχνε σε απόλυτη διαδρομή Termux:
+ /data/data/com.termux/files/usr/bin/../../usr/lib
+
+Αυτή η διαδρομή δεν είναι κατάλληλη για εκτελέσιμο που ξεκινά μέσα στο sandbox της ARIA.
+Το RUNPATH διορθώθηκε σε:
+ $ORIGIN
+
+Έτσι ο Android dynamic linker αναζητά τις εξαρτήσεις στον ίδιο κατάλογο με το llama-server, όπου το APK περιλαμβάνει το libc++_shared.so.
+Το BUILD_ARIA_ORIGINAL.sh ελέγχει πλέον ότι το εκτελέσιμο είναι ARM64 και ότι το RUNPATH είναι $ORIGIN.
+
+Περιορισμός: η στατική επιθεώρηση επιβεβαιώνει τη διόρθωση ELF, αλλά απαιτείται εκτέλεση στο πραγματικό Android για επιβεβαίωση HTTP health και inference.

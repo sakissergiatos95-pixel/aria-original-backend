@@ -1,0 +1,70 @@
+name: ARIA ORIGINAL Android ARM64 build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout complete source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK and Linux-host NDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;27.0.12077973"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build binutils python3-pip
+
+      - name: Install backend test dependencies
+        run: |
+          python3 -m pip install --break-system-packages -r BACKEND/requirements.txt pytest
+
+      - name: Build native Qwen3-capable llama-server and Android APK
+        env:
+          ARIA_BUILD_JOBS: '2'
+          ARIA_ANDROID_API: '30'
+        run: |
+          chmod +x app/gradlew
+          bash BUILD_ARIA_ORIGINAL.sh 2>&1 | tee BUILD_GITHUB_ACTIONS_LOG.txt
+
+      - name: Upload APK, checksums, and build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARIA-ORIGINAL-V117-APK-and-build-log
+          if-no-files-found: warn
+          path: |
+            output/ARIA_ORIGINAL.apk
+            output/ARIA_ORIGINAL.sha256
+            BUILD_GITHUB_ACTIONS_LOG.txt
+            LLAMA_ARM64_BUILD_LOG.txt

@@ -1,0 +1,31 @@
+ARIA ORIGINAL V117 — ΕΠΑΛΗΘΕΥΜΕΝΗ ΚΑΤΑΣΤΑΣΗ ΠΗΓΑΙΟΥ ΚΩΔΙΚΑ
+
+Έκδοση Android που δηλώνει το source: applicationId com.aria.original, versionCode 117, versionName 2.2.5-original.
+
+ΕΛΕΓΧΟΙ ΠΟΥ ΕΚΤΕΛΕΣΤΗΚΑΝ ΣΤΟ ΠΑΡΟΝ ΠΕΡΙΒΑΛΛΟΝ
+- bash -n BUILD_ARIA_ORIGINAL.sh tools/*.sh: PASS.
+- tools/verify_source.sh: PASS (AndroidManifest XML και source preflight).
+- Python compileall για BACKEND/app και BACKEND/tests: PASS.
+- Backend integration test με FastAPI TestClient: 1 passed.
+- SQLite partial unique index για έναν OWNER: PASS.
+- ZIP integrity του πακέτου: θα επαληθευτεί μετά τη δημιουργία του ZIP.
+
+ΠΕΡΙΕΧΟΜΕΝΟ / QWEN3
+- Το llama.cpp source που περιλαμβάνεται έχει Qwen3 model dispatch (LLM_ARCH_QWEN3 και νεότερες παραλλαγές).
+- Το BUILD_ARIA_ORIGINAL.sh απαιτεί ανακατασκευή ARM64 llama-server από το bundled source και απορρίπτει παλιό binary αν δεν ολοκληρωθεί το build.
+- Αυτό αποδεικνύει παρουσία υποστήριξης στον πηγαίο κώδικα, ΟΧΙ επιτυχημένο ARM64 build ή inference στη συσκευή.
+
+ΜΗ ΕΚΤΕΛΕΣΜΕΝΑ / ΔΕΝ ΔΗΛΩΝΟΝΤΑΙ ΩΣ PASS
+- Android NDK native build και Gradle APK build: δεν εκτελέστηκαν, επειδή σε αυτό το περιβάλλον δεν υπάρχει Android SDK Platform 34 ή Android NDK.
+- Εγκατάσταση, εκκίνηση και πραγματικό Qwen3 inference σε Android: εκκρεμούν.
+- Render deployment, production database/secrets, live register/login και online AI: εκκρεμούν.
+- Πραγματικό email και payment provider/webhooks: εκκρεμούν.
+
+ΣΗΜΑΝΤΙΚΟ
+Το ZIP είναι πλήρες πακέτο πηγαίου κώδικα V117, όχι τελικό APK. Δεν έχει πιστοποιηθεί ως έτοιμη για δημόσια παραγωγική διάθεση.
+
+
+V117 BUILD HOST FINDING (2026-11-13)
+Το build στο Android Termux δεν ολοκληρώθηκε. Οι διαθέσιμοι NDK έχουν host compiler linux-x86_64, ενώ η συσκευή είναι Android aarch64. Η δοκιμή ανάμειξης Termux Clang 21 με NDK R29 libc++ headers απέτυχε σε cerrno/std::abs και διακόπηκε· δεν υπάρχει νέο llama-server ούτε APK από αυτή τη δοκιμή.
+Προστέθηκε αυτοματοποιημένο GitHub Actions workflow (.github/workflows/android-build.yml) που εκτελεί το επίσημο NDK toolchain σε Linux x86_64 runner, τρέχει backend tests, native ARM64 llama-server build και Gradle APK build, και ανεβάζει APK/logs ως artifact. Το workflow δεν έχει εκτελεστεί ακόμη και δεν ισχυριζόμαστε ότι παρήγαγε APK.
+Οδηγίες: BUILD_ON_GITHUB_ACTIONS_EL.txt.
