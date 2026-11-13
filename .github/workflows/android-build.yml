@@ -58,6 +58,7 @@ jobs:
           ARIA_ANDROID_API: '30'
         run: |
           chmod +x app/gradlew
+          set -o pipefail
           bash BUILD_ARIA_ORIGINAL.sh 2>&1 | tee BUILD_GITHUB_ACTIONS_LOG.txt
 
       - name: Upload APK, checksums, and build log

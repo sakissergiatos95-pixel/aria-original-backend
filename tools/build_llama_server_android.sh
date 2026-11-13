@@ -79,7 +79,7 @@ install -m 0644 "$CXX_RUNTIME" "$APP_LIB/libc++_shared.so"
 
 if command -v readelf >/dev/null 2>&1; then
   readelf -h "$APP_LIB/libllama-server.so" | grep -q 'AArch64' || fail "Built server is not AArch64."
-    readelf -d "$APP_LIB/libllama-server.so" | grep -Fq 'Library runpath: [$ORIGIN]' || fail "Built server is missing the required \$ORIGIN RUNPATH."
+  readelf -d "$APP_LIB/libllama-server.so" | grep -Eq 'Library (runpath|rpath): \[\$ORIGIN\]' || fail "Built server is missing the required \$ORIGIN RPATH/RUNPATH."
 fi
 strings "$APP_LIB/libllama-server.so" | grep -q 'qwen3' || fail "Built server does not contain Qwen3 support marker."
 pass "Qwen3-capable ARM64 server rebuilt and staged."
