@@ -11,7 +11,7 @@ bash -n BUILD_ARIA_ORIGINAL.sh || fail "Σφάλμα σύνταξης build scri
 bash -n tools/build_llama_server_android.sh || fail "Σφάλμα σύνταξης native build script"
 bash -n app/gradlew || fail "Σφάλμα σύνταξης Gradle wrapper"
 python3 -m py_compile BACKEND/app/main.py BACKEND/tests/test_owner_and_image_api.py || fail "Σφάλμα σύνταξης backend Python"
-grep -Fq "applicationId 'com.aria.original'" app/build.gradle || fail "Λάθος applicationId"
+grep -Eq 'applicationId[[:space:]]+"com\.aria\.original\.v117"' app/build.gradle || fail "Λάθος applicationId"
 grep -Fq 'versionCode 117' app/build.gradle || fail "Λάθος versionCode"
 grep -Fq "versionName '2.2.5-original'" app/build.gradle || fail "Λάθος versionName"
 if command -v readelf >/dev/null 2>&1; then
