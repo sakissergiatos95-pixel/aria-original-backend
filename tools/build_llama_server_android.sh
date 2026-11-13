@@ -79,6 +79,10 @@ install -m 0644 "$CXX_RUNTIME" "$APP_LIB/libc++_shared.so"
 
 if command -v readelf >/dev/null 2>&1; then
   readelf -h "$APP_LIB/libllama-server.so" | grep -q 'AArch64' || fail "Built server is not AArch64."
+  echo "===== ELF DYNAMIC SECTION ====="
+  readelf -d "$APP_LIB/libllama-server.so" || true
+  echo "===== CMAKE RPATH SETTINGS ====="
+  grep -E 'CMAKE_SKIP_RPATH|CMAKE_BUILD_WITH_INSTALL_RPATH|CMAKE_INSTALL_RPATH|CMAKE_EXE_LINKER_FLAGS' "$BUILD/CMakeCache.txt" || true
   readelf -d "$APP_LIB/libllama-server.so" | grep -Eq 'Library (runpath|rpath): \[\$ORIGIN\]' || fail "Built server is missing the required \$ORIGIN RPATH/RUNPATH."
 fi
 strings "$APP_LIB/libllama-server.so" | grep -q 'qwen3' || fail "Built server does not contain Qwen3 support marker."
