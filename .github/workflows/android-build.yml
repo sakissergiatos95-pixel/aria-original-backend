@@ -24,6 +24,11 @@ jobs:
           java-version: '21'
 
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+
       - name: Install Android SDK and Linux-host NDK
         shell: bash
         run: |
