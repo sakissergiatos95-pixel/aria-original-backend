@@ -77,6 +77,8 @@ mkdir -p "$APP_LIB"
 install -m 0755 "$SERVER" "$APP_LIB/libllama-server.so"
 install -m 0644 "$CXX_RUNTIME" "$APP_LIB/libc++_shared.so"
 
+command -v patchelf >/dev/null 2>&1 || fail "patchelf is required."
+patchelf --set-rpath '$ORIGIN' "$APP_LIB/libllama-server.so"
 if command -v readelf >/dev/null 2>&1; then
   readelf -h "$APP_LIB/libllama-server.so" | grep -q 'AArch64' || fail "Built server is not AArch64."
   echo "===== ELF DYNAMIC SECTION ====="
